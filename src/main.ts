@@ -238,7 +238,7 @@ const CELL_OFFSET = 10
 const CELL_SIZE = 32
 
 scene('game', () => {
-    createGrid(15, 10, CELL_SIZE, CELL_OFFSET)
+    createGrid(15, 15, CELL_SIZE, CELL_OFFSET)
     generateBombCountForCell()
 
     onClick('cell', (cell) => {
