@@ -1,5 +1,6 @@
 import { CellComp } from './interfaces';
 import kaboom, { GameObj, Vec2 } from 'kaboom'
+import { makeButton } from './utils'
 
 kaboom({
     background: [0, 50, 50, 1],
@@ -226,6 +227,7 @@ const createGrid = (width: number, height: number, cellSize: number, offset: num
             const createdCell = makeCell(vec2(x * cellSize + offset, y * cellSize + offset))
 
             if (Math.random() > 0.8) {
+                bombCount++
                 createdCell.setBombState(true)
             }
         }
@@ -237,14 +239,31 @@ const createGrid = (width: number, height: number, cellSize: number, offset: num
 const CELL_OFFSET = 10
 const CELL_SIZE = 32
 
+const GRID_WIDTH = 15
+const GRID_HEIGHT = 15
+
+let bombCount = 0
+
 scene('game', () => {
-    createGrid(15, 15, CELL_SIZE, CELL_OFFSET)
+    createGrid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE, CELL_OFFSET)
     generateBombCountForCell()
+
+    add([
+        text("Number of bombs: " + bombCount, {
+            size: 32
+        }),
+        pos(GRID_WIDTH * CELL_SIZE + 16, 16)
+    ])
 
     onClick('cell', (cell) => {
         cell.reveal()
     });
 
+    // Mobile input
+    onTouchStart((_, pos) => {
+        const selectedCell = getSelectedCellFromMousePos(pos)
+        selectedCell?.reveal()
+    })
 
     onMousePress('right', (pos) => {
 
