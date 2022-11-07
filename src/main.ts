@@ -1,174 +1,13 @@
 import { CellComp } from './interfaces';
 import kaboom, { GameObj, Vec2 } from 'kaboom'
-import { makeButton } from './utils'
+import { makeButton, getSelectedCellFromMousePos, getSurroundingCells, makeCell, isOnDesktop, } from './utils'
+import { CELL_OFFSET, CELL_SIZE, GRID_HEIGHT, GRID_WIDTH, ITEM_SPACING, BOMB_PROBABILITY } from './constants'
 
 kaboom({
     background: [0, 50, 50, 1],
+    touchToMouse: true,
 })
 
-
-const globalToGridCoords = (pos: Vec2, cellSize: number, offset: number) => {
-    return vec2(
-        Math.floor((pos.x - offset) / cellSize),
-        Math.floor((pos.y - offset) / cellSize)
-    )
-}
-
-const getSelectedCellFromMousePos = (mousePos: Vec2) => {
-    const gridCoords = globalToGridCoords(mousePos, CELL_SIZE, CELL_OFFSET)
-
-    const selected_cell = get('cell').filter(cell => {
-        return cell.getGridPos().eq(gridCoords)
-    })[0] as GameObj<CellComp>
-
-    if (selected_cell) {
-        return selected_cell
-    }
-    return null
-}
-
-
-function cell(cellSize: number = 32): CellComp {
-    let isBomb = false
-    let isRevealed = false
-    let isFlagged = false
-    let bombCount = 0
-
-    const TEXT_REDUCTION_SCALE = 3
-
-    return {
-        id: "cell-game",
-        require: ["pos", "area"],
-
-        draw() {
-
-            if (bombCount == 0 && isRevealed) {
-                //@ts-ignore
-                this.color = rgb(120, 120, 120)
-                return
-            }
-
-
-            if (isFlagged && !isRevealed) {
-                drawText({
-                    text: "F",
-                    color: rgb(255, 255, 0),
-                    pos: vec2(cellSize / 2, cellSize / 2),
-                    origin: "center",
-                    scale: vec2(1 / (TEXT_REDUCTION_SCALE), 1 / (TEXT_REDUCTION_SCALE)),
-                })
-            }
-
-            if (isRevealed && !isBomb) {
-                drawText({
-                    text: bombCount.toString(),
-                    color: rgb(0, 255, 0),
-                    pos: vec2(cellSize / 2, cellSize / 2),
-                    origin: "center",
-                    scale: vec2(1 / (TEXT_REDUCTION_SCALE), 1 / (TEXT_REDUCTION_SCALE)),
-                })
-            }
-
-            if (isBomb && isRevealed) {
-                //@ts-ignore
-                drawCircle({
-                    color: rgb(255, 0, 0),
-                    pos: vec2(cellSize / 2, cellSize / 2),
-                    radius: cellSize / 4,
-                    origin: "center",
-                })
-            }
-        },
-        inspect() {
-            return `${isBomb ? "bomb" : "cell"} count: ${bombCount}`
-        },
-
-        isCellBomb() {
-            return isBomb
-        },
-
-        setBombState(state: boolean) {
-            isBomb = state
-        },
-
-        setFlaggedState(state: boolean) {
-            isFlagged = state
-        },
-        isCellFlagged() {
-            return isFlagged
-        },
-        isCellRevealed() {
-            return isRevealed
-        },
-        reveal(hasBeenFlagged: boolean = false) {
-
-            if (this.isCellFlagged())
-                return
-
-            isRevealed = true
-
-            if (bombCount == 0) {
-                revealAdjacentCells(this.getGridPos(), hasBeenFlagged)
-            }
-            if (isBomb) {
-                console.log("game over")
-                //@ts-ignore
-                addKaboom(this.pos)
-
-                wait(3, () => go('loser'))
-            }
-        },
-        increaseBombCount() {
-            bombCount++
-        },
-        getBombCount() {
-            return bombCount
-        },
-        getGridPos(): Vec2 {
-            //@ts-ignore
-            return globalToGridCoords(this.pos, cellSize, CELL_OFFSET)
-        }
-    }
-}
-
-const revealAdjacentCells = (cellGridPos: Vec2, hasBeenFlagged: boolean) => {
-    const neighbours = getSurroundingCells(cellGridPos)
-
-    if (hasBeenFlagged)
-        return
-
-    for (let neighbour of neighbours) {
-        if (neighbour.isCellFlagged())
-            continue
-
-        if (neighbour.isCellBomb())
-            continue
-
-        if (neighbour.isCellRevealed())
-            continue
-
-        if (neighbour.getBombCount() > 0) {
-            neighbour.reveal(true)
-            continue
-        }
-
-        neighbour.reveal()
-    }
-}
-
-const makeCell = (position: Vec2) => {
-    const newCell = add([
-        rect(32, 32),
-        pos(position),
-        color(255, 255, 255),
-        outline(4),
-        area(),
-        cell(CELL_SIZE),
-        'cell'
-    ])
-
-    return newCell
-}
 
 const checkIfAllBombCellsAreFlagged = () => {
     const bombCells = get('cell').filter(cell => {
@@ -211,18 +50,7 @@ const generateBombCountForCell = () => {
     }
 }
 
-const getSurroundingCells = (cellToCheckGridPos: Vec2) => {
-    const cells = get('cell') as GameObj<CellComp>[]
-    const surroundingCells = cells.filter(cell => {
-        const currentCellGridPos = cell.getGridPos()
-        return currentCellGridPos.x >= cellToCheckGridPos.x - 1 &&
-            currentCellGridPos.x <= cellToCheckGridPos.x + 1 &&
-            currentCellGridPos.y >= cellToCheckGridPos.y - 1 &&
-            currentCellGridPos.y <= cellToCheckGridPos.y + 1
-    })
 
-    return surroundingCells
-}
 
 const makeGrid = (width: number, height: number, cellSize: number, offset: number) => {
 
@@ -230,7 +58,7 @@ const makeGrid = (width: number, height: number, cellSize: number, offset: numbe
         for (let y = 0; y < height; y++) {
             const createdCell = makeCell(vec2(x * cellSize + offset, y * cellSize + offset))
 
-            if (Math.random() > 0.85) {
+            if (Math.random() > BOMB_PROBABILITY) {
                 bombCount++
                 createdCell.setBombState(true)
             }
@@ -238,39 +66,51 @@ const makeGrid = (width: number, height: number, cellSize: number, offset: numbe
     }
 }
 
+const makeMenuBar = (menuBarItems: any) => {
+    for (let i = 0; i < menuBarItems.length; i++) {
+        menuBarItems[i].pos.x = 10
+        menuBarItems[i].pos.y = GRID_WIDTH * CELL_SIZE + (i + 1) * ITEM_SPACING
+    }
+}
+
+const handleFlagging = (pos: Vec2) => {
+
+    const selectedCell = getSelectedCellFromMousePos(pos)
+    if (selectedCell) {
+
+        if (selectedCell.isCellRevealed())
+            return
+
+        if (selectedCell.isCellFlagged())
+            bombCount++
+        else
+            bombCount--
 
 
-const CELL_OFFSET = 10
-const CELL_SIZE = 32
+        selectedCell.setFlaggedState(!selectedCell.isCellFlagged())
 
-const GRID_WIDTH = 15
-const GRID_HEIGHT = 15
+    }
+
+    if (checkIfAllBombCellsAreFlagged() && checkIfAllNonBombCellsAreUnflagged() && bombCount == 0) {
+        console.log("you win")
+        go('winner')
+    }
+
+}
+
 
 let bombCount = 0
+let isFlaggingEnabled = false
 
 scene('game', () => {
-    makeGrid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE, CELL_OFFSET)
-    generateBombCountForCell()
 
-    const buttonsMap: {
-        [key: string]: () => void
-    } = {
-        "reset": () => {
-            bombCount = 0
-            go('game')
-        },
-    }
-
-    // iterate over the buttonsmap
-    let i = 1
-    for (let button in buttonsMap) {
-        //create a button
-        makeButton(vec2(10, GRID_HEIGHT * CELL_SIZE + 20 * i), button, GREEN, () => {
-            buttonsMap[button]()
-        })
-        i += 2
-    }
-
+    const isFlaggedText = isOnDesktop() ? add([pos(0, 0), text("")]) : add([
+        text("Flag mode is " + (isFlaggingEnabled ? "enabled" : "disabled"), {
+            size: 32
+        }),
+        pos(0, 0),
+        "menu-item",
+    ])
 
     const bombCountText = add([
         text("Number of bombs: " + bombCount, {
@@ -279,40 +119,58 @@ scene('game', () => {
         pos(GRID_WIDTH * CELL_SIZE + 16, 16)
     ])
 
+    const menuBarItems = [
+        bombCountText,
+        makeButton(vec2(0, 0), {
+            textToShow: "Reset",
+            hoverColor: RED,
+            onClick: () => {
+                bombCount = 0
+                go('game')
+            }
+        }),
+        makeButton(vec2(0, 0), {
+            textToShow: "Toggle flag mode",
+            hoverColor: BLUE,
+            onClick: () => {
+                console.log("toggle flag mode")
+                isFlaggingEnabled = !isFlaggingEnabled
+                isFlaggedText.text = "Flag mode is " + (isFlaggingEnabled ? "enabled" : "disabled")
+            },
+            onlyMobile: true
+
+        }),
+        isFlaggedText
+
+    ]
+
+    makeGrid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE, CELL_OFFSET)
+    makeMenuBar(menuBarItems)
+
+    generateBombCountForCell()
+
     onClick('cell', (cell) => {
-        cell.reveal()
+
+        if (isFlaggingEnabled && !isOnDesktop()) {
+            handleFlagging(cell.pos)
+        }
+        if (!isFlaggingEnabled) {
+
+            const selectedCell = getSelectedCellFromMousePos(cell.pos)
+            if (selectedCell) {
+                selectedCell.reveal()
+            }
+
+        }
     });
 
-    // Mobile input
-    onTouchStart((_, pos) => {
-        const selectedCell = getSelectedCellFromMousePos(pos)
-        selectedCell?.reveal()
+    onLoad(() => {
+        bombCountText.text = "Number of bombs: " + bombCount
     })
 
-    onMousePress('right', (pos) => {
 
-        const selectedCell = getSelectedCellFromMousePos(pos)
-        if (selectedCell) {
-
-            if (selectedCell.isCellRevealed())
-                return
-
-            if (selectedCell.isCellFlagged())
-                bombCount++
-            else
-                bombCount--
-
-
-            selectedCell.setFlaggedState(!selectedCell.isCellFlagged())
-
-        }
-
-        if (checkIfAllBombCellsAreFlagged() && checkIfAllNonBombCellsAreUnflagged() && bombCount == 0) {
-            console.log("you win")
-            go('winner')
-        }
-
-        bombCountText.text = "Number of bombs: " + bombCount
+    onMousePress('right', (pos: Vec2) => {
+        handleFlagging(pos)
     });
 
 })
@@ -336,6 +194,10 @@ scene('loser', () => {
         }),
         pos(TEXT_PADDING, TEXT_PADDING),
     ])
+
+    onMousePress('left', () => {
+        go('game')
+    })
 
     onKeyPress('space', () => {
         go('game')
@@ -361,6 +223,9 @@ scene('winner', () => {
         }),
         pos(PAD, PAD),
     ])
+    onMousePress('left', () => {
+        go('game')
+    })
 
     onKeyPress('space', () => {
         go('game')
