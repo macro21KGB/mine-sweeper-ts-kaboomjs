@@ -52,7 +52,7 @@ function cell(cellSize: number = 32): CellComp {
             if (isFlagged && !isRevealed) {
                 drawText({
                     text: "F",
-                    color: rgb(0, 255, 0),
+                    color: rgb(255, 255, 0),
                     pos: vec2(cellSize / 2, cellSize / 2),
                     origin: "center",
                     scale: vec2(1 / (TEXT_REDUCTION_SCALE), 1 / (TEXT_REDUCTION_SCALE)),
@@ -101,6 +101,10 @@ function cell(cellSize: number = 32): CellComp {
             return isRevealed
         },
         reveal(hasBeenFlagged: boolean = false) {
+
+            if (this.isCellFlagged())
+                return
+
             isRevealed = true
 
             if (bombCount == 0) {
@@ -220,13 +224,13 @@ const getSurroundingCells = (cellToCheckGridPos: Vec2) => {
     return surroundingCells
 }
 
-const createGrid = (width: number, height: number, cellSize: number, offset: number) => {
+const makeGrid = (width: number, height: number, cellSize: number, offset: number) => {
 
     for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
             const createdCell = makeCell(vec2(x * cellSize + offset, y * cellSize + offset))
 
-            if (Math.random() > 0.8) {
+            if (Math.random() > 0.85) {
                 bombCount++
                 createdCell.setBombState(true)
             }
@@ -245,10 +249,30 @@ const GRID_HEIGHT = 15
 let bombCount = 0
 
 scene('game', () => {
-    createGrid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE, CELL_OFFSET)
+    makeGrid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE, CELL_OFFSET)
     generateBombCountForCell()
 
-    add([
+    const buttonsMap: {
+        [key: string]: () => void
+    } = {
+        "reset": () => {
+            bombCount = 0
+            go('game')
+        },
+    }
+
+    // iterate over the buttonsmap
+    let i = 1
+    for (let button in buttonsMap) {
+        //create a button
+        makeButton(vec2(10, GRID_HEIGHT * CELL_SIZE + 20 * i), button, GREEN, () => {
+            buttonsMap[button]()
+        })
+        i += 2
+    }
+
+
+    const bombCountText = add([
         text("Number of bombs: " + bombCount, {
             size: 32
         }),
@@ -269,13 +293,26 @@ scene('game', () => {
 
         const selectedCell = getSelectedCellFromMousePos(pos)
         if (selectedCell) {
+
+            if (selectedCell.isCellRevealed())
+                return
+
+            if (selectedCell.isCellFlagged())
+                bombCount++
+            else
+                bombCount--
+
+
             selectedCell.setFlaggedState(!selectedCell.isCellFlagged())
+
         }
 
-        if (checkIfAllBombCellsAreFlagged() && checkIfAllNonBombCellsAreUnflagged()) {
+        if (checkIfAllBombCellsAreFlagged() && checkIfAllNonBombCellsAreUnflagged() && bombCount == 0) {
             console.log("you win")
             go('winner')
         }
+
+        bombCountText.text = "Number of bombs: " + bombCount
     });
 
 })
